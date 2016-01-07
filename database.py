@@ -1,9 +1,9 @@
-import redis
 import string
-from walrus import *
 import walrus
 import itertools
 import string
+import re
+
 
 def db_connection():
     db = walrus.Walrus(host='192.168.1.4', db=8)

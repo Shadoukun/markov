@@ -4,9 +4,10 @@ import nltk.data, nltk.tag
 from nltk.tag.perceptron import PerceptronTagger
 
 tagger = PerceptronTagger()
-MAX_OVERLAP_RATIO = 0.5
+MAX_OVERLAP_RATIO = 0.2
 MAX_OVERLAP_TOTAL = 10
 DEFAULT_TRIES = 500
+
 
 class MarkovEase(markovify.Text):
     """
@@ -31,7 +32,11 @@ class MarkovEase(markovify.Text):
 
     def sentence_split(self, text):
         # split everything up by newlines, prepare them, and join back together
-        return re.split(r"\s*\n\s*", text)
+        lines = text.splitlines()
+        text = " ".join([self._prepare_text(line)
+                        for line in lines if line.strip()])
+
+        return markovify.split_into_sentences(text)
 
     def word_split(self, sentence):
         global tagger

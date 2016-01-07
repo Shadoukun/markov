@@ -4,7 +4,6 @@ import string
 import re
 from model import *
 import database
-import markovify
 
 from twisted.internet import defer, endpoints, protocol, reactor, task
 from twisted.python import log
@@ -12,18 +11,18 @@ from twisted.words.protocols import irc
 
 
 class MarkovBot(irc.IRCClient):
+
+    host = '--host--'
+    channel = '#lobby'
+    port = '6667'
+    nickname = 'markov'
+    chattiness = 0.1
+    chain_length = 2
+
     def __init__(self):
-        # idk
-        self.deferred = defer.Deferred()
-        self.host = '--host--'
-        self.channel = '#lobby'
-        self.port = '6667'
-        self.nickname = 'markov'
-        self.chattiness = 0.2
-
         self.r = database.db_connection()
+        self.deferred = defer.Deferred()
         self.logger = database.MessageLogger()
-
 
     def get_prefix(self, nick):
         # Returns string made up of IRC host-channel-nick, for sorting logs
@@ -34,22 +33,31 @@ class MarkovBot(irc.IRCClient):
         msg = self.logger._prepare_message(msg)
         words = msg.split()
         seedlist = []
-        for i in range(len(words) - 2):
-                seedlist.append(words[i:i + 2])
-                seed = random.choice(seedlist)
-        return seed
+        for i in range(len(words) - self.chain_length):
+                seedlist.append(words[i:i + self.chain_length])
+
+        seed = random.choice(seedlist)
+
+        return tuple(seed)
 
     def get_model(self, prefix=None):
         # pulls values from s-keys and generates MarkovEase model
 
-
         text = self.logger.get_text()
-        #for key in keys:
-        #    for msg in self.r.lrange(key, 0, -1):
-        #        text.append(msg)
         model = MarkovEase("\n".join(text), state_size=2)
-        print "got model"
         return model
+
+    def generate_message(self, message):
+        # Takes a seed message (if one) and generates message
+        model = self.get_model(prefix='*')
+        seed = self.seed(message)
+
+        try:
+            gen_message = model.make_sentence(init_state=seed)
+        except KeyError:
+            gen_message = model.make_sentence()
+
+        return gen_message
 
     # The end of the redis/markov text generation orgy.
     # All IRC methods below
@@ -75,7 +83,7 @@ class MarkovBot(irc.IRCClient):
             msg = "I hope you die."
             self.msg(user, msg)
 
-        if len(words) > 2:
+        if len(words) > self.chain_length:
             prefix = self.get_prefix(nick=user)
             self.logger.log(prefix, msg)
 
@@ -83,22 +91,17 @@ class MarkovBot(irc.IRCClient):
                 random.random() < self.chattiness
                     ):
 
-                model = self.get_model(prefix='*')
-                seed = tuple(self.seed(msg))
-                try:
-                    message = model.make_sentence(init_state=seed)
-                except KeyError:
-                    message = model.make_sentence()
+                    message = self.generate_message(msg)
 
-                if message:
-                    self.msg(channel, message)
-                else:
-                    self.msg(channel, 'nope')
+                    if message:
+                        self.msg(channel, message)
+                    else:
+                        self.msg(channel, 'nope')
 
     def _sendMessage(self, msg, target, nick=None):
         if nick:
             msg = '%s, %s' % (nick, msg)
-        self.msg(self.channel, msg)
+        self.msg(channel, msg)
 
     def _showError(self, failure):
         return failure.getErrorMessage()
@@ -120,5 +123,8 @@ def main(reactor, description):
     return d
 
 if __name__ == '__main__':
+    host = MarkovBot.host
+    port = MarkovBot.port
     log.startLogging(sys.stderr)
-    task.react(main, ['tcp:--host--:6667'])
+    hoststring = ''.join(['tcp:', MarkovBot.host, ':', MarkovBot.port])
+    task.react(main, [hoststring])
