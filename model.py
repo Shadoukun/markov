@@ -1,49 +1,67 @@
 import markovify
-import re
-import nltk.data, nltk.tag
-from nltk.tag.perceptron import PerceptronTagger
+import database
+import exceptions
+import threading
+import logging
+import ConfigParser
+import random
 
-tagger = PerceptronTagger()
 MAX_OVERLAP_RATIO = 0.2
 MAX_OVERLAP_TOTAL = 10
 DEFAULT_TRIES = 500
 
 
-class MarkovEase(markovify.Text):
-    """
-    Overrides markovify.Text. accepts all the same args.
-    input_text: A string.
-    state_size: An integer, indicating the number of words in the model's state.
-    chain: A trained markovify.Chain instance for this text, if pre-processed.
+class Model(object):
 
-    """
+    def __init__(self, config):
+        self.log = logging.getLogger(__name__)
 
-    def test_sentence_input(self, sentence):
-        # Add sentence tests, or not
-        return True
+        self.config = config
+        self.r = database.db_connection()
+        self.dbLog = database.MessageLogger()
 
-    def _prepare_text(self, text):
-        # parses text. Remove/replace special characters
-        text = text.strip()
-        if not text.endswith((".", "?", "!")):
-            text += "."
+        self.get_model()
 
-        return text
+    def get_model(self, prefix=None):
+        # pulls values from s-keys and generates MarkovEase model
+        self.log.debug("Getting model text...")
+        text = self.dbLog.get_text()
 
-    def sentence_split(self, text):
-        # split everything up by newlines, prepare them, and join back together
-        lines = text.splitlines()
-        text = " ".join([self._prepare_text(line)
-                        for line in lines if line.strip()])
+        self.log.debug("Generating model...")
 
-        return markovify.split_into_sentences(text)
+        try:
+            self.model = markovify.NewlineText("\n".join(text), state_size=2)
+            self.log.debug("Generated model successfully.")
+            self.log.debug("[MODEL ID]" + str(id(self.model)))
 
-    def word_split(self, sentence):
-        global tagger
-        words = re.split(self.word_split_pattern, sentence)
-        words = ["::".join(tag) for tag in tagger.tag(words)]
-        return words
+        except:
+            raise exceptions.ModelException("Model generation failed.")
 
-    def word_join(self, words):
-        sentence = " ".join(word.split("::")[0] for word in words)
-        return sentence
+        self.log.debug("Spawning model timer...")
+        thread = threading.Timer(120, self.get_model)
+        thread.start()
+        self.log.debug("...Thread spawned.")
+
+    def generate_message(self, msg):
+        self.log.debug("generate message")
+
+        # Takes a seed message (if one) and generates message
+        seed_enabled = self.config.get('markov', 'seed')
+
+        if seed_enabled is "on":
+
+            try:
+                seedlist = self.word_split(msg)
+                seedword = random.choice(seedlist)
+                seed = seedlist[seedword+1]
+                message = self.model.make_sentence_with_start(beginning=seed)
+            except:
+                raise exceptions.ModelException("failed seed")
+                message = self.model.make_sentence()
+
+            finally:
+                return message
+
+        else:
+            message = self.model.make_sentence()
+            return message

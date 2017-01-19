@@ -1,7 +1,6 @@
 import string
 import walrus
 import itertools
-import string
 import re
 
 
@@ -10,45 +9,28 @@ def db_connection():
     return db
 
 
-# class MessageLogger:
-#     """
-#     An independent logger class (because separation of application
-#     and protocol logic is a good thing).
-#     """
-#     def __init__(self, List):
-#         self.db = db_connection()
-#         self.List = List
-#
-#     def log(self, key, message):
-#         """Write a message to Redis."""
-#         # removes special characters from message and logs it to the db
-#         # where the message is the value of key.
-#         message = message.translate(None, string.punctuation)
-#
-#         self.List.append(message)
-
-
 class MessageLogger:
-    db = db_connection()
 
-    def get_key(self, key):
+    def __init__(self):
+        self.db = db_connection()
+
+    def get_keys(self, key=None):
         # Returns the object (list) at 'key'
-        dblist = self.db.Set(key)
+        if key:
+            dblist = self.db.Set(key)
+        else:
+            dblist = self.db.keys()
         return dblist
 
-    def get_keys(self):
-        # returns all keys
-        keys = self.db.keys()
-        return keys
-
     def get_text(self, key=None):
-        if not key:
-            # keylist = [k for k in self.db.keys()]
-            txtlist = []
-            keys = [self.get_key(k) for k in self.db.keys()]
-            for s in itertools.chain.from_iterable(keys):
+
+        txtlist = []
+        keys = [self.get_keys(k) for k in self.db.keys()]
+
+        for s in itertools.chain.from_iterable(keys):
                 txtlist.append(s.strip())
-            return txtlist
+
+        return txtlist
 
     def _prepare_message(self, message):
         rep = [
