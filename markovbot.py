@@ -32,7 +32,7 @@ class MarkovBot(irc.IRCClient, Commands):
           for prefixing key in the model db
           nick: user's nickname
         """
-        key = ['irc', self.host, self.channel, nick]
+        key = ['irc', self.config.server_address, self.config.channel, nick]
         return '-'.join([k for k in key if k is not None])
 
     def connection_lost(self, reason):

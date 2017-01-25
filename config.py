@@ -29,7 +29,7 @@ class ConfigManager(object):
 
     @property
     def server_address(self):
-        return self._server_address
+        return str(self._server_address)
 
     @server_address.setter
     def server_address(self, value):
@@ -45,7 +45,7 @@ class ConfigManager(object):
 
     @property
     def channel(self):
-        return self._channel
+        return str(self._channel)
 
     @channel.setter
     def channel(self, value):
@@ -54,7 +54,7 @@ class ConfigManager(object):
 
     @property
     def bot_nick(self):
-        return self._bot_nick
+        return str(self._bot_nick)
 
     @bot_nick.setter
     def bot_nick(self, value):
@@ -66,11 +66,11 @@ class ConfigManager(object):
 
     @property
     def db_host(self):
-        return self._db_host
+        return str(self._db_host)
 
     @property
     def db(self):
-        return self._db
+        return int(self._db)
 
     @property
     def chattiness(self):
@@ -90,7 +90,7 @@ class ConfigManager(object):
 
     @property
     def chain_length(self):
-        return self._chain_length
+        return int(self._chain_length)
 
     @property
     def authed_users(self):
