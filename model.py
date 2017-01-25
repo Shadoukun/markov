@@ -1,24 +1,22 @@
 import markovify
-import database
+import logger
 import exceptions
 import threading
 import logging
-import ConfigParser
 import random
-
-MAX_OVERLAP_RATIO = 0.2
-MAX_OVERLAP_TOTAL = 10
-DEFAULT_TRIES = 500
 
 
 class Model(object):
+
+    MAX_OVERLAP_RATIO = 0.2
+    MAX_OVERLAP_TOTAL = 10
+    DEFAULT_TRIES = 500
 
     def __init__(self, config):
         self.log = logging.getLogger(__name__)
 
         self.config = config
-        self.r = database.db_connection()
-        self.dbLog = database.MessageLogger()
+        self.dbLog = logger.Logger(self.config.db_host, self.config.db)
 
         self.get_model()
 
@@ -46,8 +44,7 @@ class Model(object):
         self.log.debug("generate message")
 
         # Takes a seed message (if one) and generates message
-        seed_enabled = self.config.get('markov', 'seed')
-
+        seed_enabled = self.config.seed
         if seed_enabled is "on":
 
             try:

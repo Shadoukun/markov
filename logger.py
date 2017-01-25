@@ -4,15 +4,15 @@ import itertools
 import re
 
 
-def db_connection():
-    db = walrus.Walrus(host='192.168.1.4', db=8)
+def db_connection(host, db):
+    db = walrus.Walrus(host=host, db=db)
     return db
 
 
-class MessageLogger:
+class Logger:
 
-    def __init__(self):
-        self.db = db_connection()
+    def __init__(self, host, db):
+        self.db = db_connection(host, db)
 
     def get_keys(self, key=None):
         # Returns the object (list) at 'key'

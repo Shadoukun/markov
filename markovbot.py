@@ -1,13 +1,10 @@
 from model import Model
-import database
+import logger
 from commands import Commands
 import random
-import sys
 import re
-import os
-import ConfigParser
-from twisted.internet import defer, endpoints, protocol, reactor, task
-from twisted.python import log
+from config import ConfigManager
+from twisted.internet import defer, protocol, reactor
 from twisted.words.protocols import irc
 
 import logging
@@ -17,45 +14,26 @@ logging.basicConfig(level=logging.DEBUG)
 
 class MarkovBot(irc.IRCClient, Commands):
 
-    def __init__(self):
+    def __init__(self, factory, model):
         # Inherit commands
         Commands.__init__(self)
+        self.factory = factory
+        self.config = self.factory.config
+        self.nickname = self.config.bot_nick
+        self.model = model
 
         # Error/Info log. not to be confused with message logger
         self.log = logging.getLogger(__name__)
-        self.log.info("Initializing...")
-        self.parse_config()
-
-        self.r = database.db_connection()
         self.deferred = defer.Deferred()
-        self.logger = database.MessageLogger()
+        self.logger = logger.Logger(self.config.db_host, self.config.db)
 
-        self.log.info("Getting Commands...")
-
-        self.commands = {
-                        "!chattiness": self.set_chattiness,
-                        "!seed": self.setSeed
-                        }
-
-        self.log.info("Generating model...")
-        self.modeller = Model(config)
-
-        self.log.info("...Initialized.")
-
-    def parse_config(self):
-        """Defines variables from config file"""
-
-        self.log.info("Parsing Config...")
-        self.config = get_config(os.getcwd() + "/settings.ini")
-        self.__dict__.update([i for s in config.sections() for i in config.items(s)])
-
-    def get_prefix(self, nick):
+    def get_key(self, nick):
         """Returns a string (host-channel-nick) used
           for prefixing key in the model db
           nick: user's nickname
         """
-        prefix = ['irc', self.host, self.channel, nick]
-        return '-'.join([p for p in prefix if p is not None])
+        key = ['irc', self.host, self.channel, nick]
+        return '-'.join([k for k in key if k is not None])
 
     def connection_lost(self, reason):
         self.deferred.errback(reason)
@@ -63,8 +41,7 @@ class MarkovBot(irc.IRCClient, Commands):
     def signedOn(self):
         # This is called once the server has acknowledged that we sent
         # both NICK and USER.
-        for channel in self.factory.channels:
-            self.join(channel)
+        self.join(self.factory.channel)
 
     def privmsg(self, user, channel, msg):
         """This will get called when the bot receives a message."""
@@ -72,22 +49,23 @@ class MarkovBot(irc.IRCClient, Commands):
         words = msg.split()
 
         # Check to see if they're sending me a private message
-        if channel == self.nickname:
+        if channel is self.config.bot_nick:
             msg = "I hope you die."
             self.msg(user, msg)
 
-        if len(words) > self.chain_length:
-            prefix = self.get_prefix(nick=user)
-            self.logger.log(prefix, msg)
+        if len(words) > self.config.chain_length:
+            key = self.get_key(nick=user)
+            self.logger.log(key, msg)
 
         if [msg.startswith(command) for command in self.commands]:
             self.check_command(user, msg)
 
-            if re.search('^markov\S*\W*', msg) or (
-                random.random() < self.chattiness
+            regex = '^{n}\S*\W*'.format(n=self.config.bot_nick)
+            if re.match(regex, msg) or (
+                random.random() < self.config.chattiness
                     ):
 
-                message = self.modeller.generate_message(msg)
+                message = self.model.generate_message(msg)
 
                 if message:
                     self.msg(channel, message)
@@ -96,7 +74,7 @@ class MarkovBot(irc.IRCClient, Commands):
 
     def check_command(self, user, msg):
 
-        if user in self.authed_users:
+        if user in self.config.authed_users:
             for key, command in self.commands.iteritems():
                 if msg.startswith(key):
                     command(msg)
@@ -115,38 +93,38 @@ class MarkovBot(irc.IRCClient, Commands):
         return 'Pong.'
 
 
-def get_config(path):
-    """
-    Returns the config object
-    """
-
-    config = ConfigParser.ConfigParser()
-    config.read(path)
-    return config
-
-
 class IRCFactory (protocol.ReconnectingClientFactory):
-    config = get_config(os.getcwd() + "/settings.ini")
-    channel = config.get("IRC", "channel")
-    protocol = MarkovBot
-    channels = [channel]
 
+    def __init__(self):
+        self.config = ConfigManager()
+        self.channel = self.config.channel
+        self.nickname = self.config.bot_nick
 
-def main(reactor, description):
-    endpoint = endpoints.clientFromString(reactor, description)
-    factory = IRCFactory()
-    d = endpoint.connect(factory)
-    d.addCallback(lambda protocol: protocol.deferred)
-    return d
+    def buildProtocol(self, addr):
+        model = Model(self.config)
+        return MarkovBot(self, model)
+
+    def connect(self):
+
+        host = self.config.server_address
+        port = self.config.server_port
+
+        print "Connecting to %s:%s" % (host,  port)
+        reactor.connectTCP(host, port, self)
+
+    def clientConnectionLost(self, connector, reason):
+        print "Lost connection (%s), reconnecting." % (reason,)
+        connector.connect()
+
+    def clientConnectionFailed(self, connector, reason):
+        print "Could not connect:", reason
+        reactor.stop()
+
+    def run(self):
+        reactor.run()
 
 
 if __name__ == '__main__':
-
-    config = get_config(os.getcwd() + "/settings.ini")
-
-    irchost = config.get("IRC", "host")
-    ircport = config.get("IRC", "port")
-
-    log.startLogging(sys.stderr)
-    hoststring = ''.join(['tcp:', irchost, ':', ircport])
-    task.react(main, [hoststring])
+    factory = IRCFactory()
+    factory.connect()
+    factory.run()
