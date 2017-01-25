@@ -124,7 +124,7 @@ class IRCFactory (protocol.ReconnectingClientFactory):
         reactor.run()
 
 
-if __name__ == '__main__':
+def main():
     factory = IRCFactory()
     factory.connect()
     factory.run()

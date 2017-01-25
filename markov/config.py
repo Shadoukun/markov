@@ -1,4 +1,4 @@
-import os
+import sys, os
 from configparser import SafeConfigParser
 
 
@@ -6,12 +6,11 @@ class ConfigManager(object):
 
     def __init__(self):
         # http://stackoverflow.com/a/4060259
-        __location__ = os.path.realpath(
-            os.path.join(os.getcwd(), os.path.dirname(__file__)) + "/")
-        config_file_path = os.path.join(__location__, 'markov.conf')
-
+        __location__ = os.path.split(os.getcwd())[0]
+        print __location__
+        sys.path.append(os.path.abspath(__location__))
         self._config_parser = SafeConfigParser()
-        self._config_parser.readfp(open(config_file_path))
+        self._config_parser.readfp(open("markov.conf"))
 
         self._db_host = self._config_parser.get('DB', 'host')
         self._db = self._config_parser.get('DB', 'db')
