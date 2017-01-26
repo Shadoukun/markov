@@ -1,20 +1,23 @@
-from model import Model
-import logger
-from commands import Commands
-import random
 import re
-from config import ConfigManager
+import logging
+import random
+import sys
+
 from twisted.internet import defer, protocol, reactor
 from twisted.words.protocols import irc
 
-import logging
+from model import Model
+from logger import Logger
+from commands import Commands
+from config import ConfigManager
+
 
 logging.basicConfig(level=logging.DEBUG)
 
 
 class MarkovBot(irc.IRCClient, Commands):
 
-    def __init__(self, factory, model):
+    def __init__(self, factory, model, logger):
         # Inherit commands
         Commands.__init__(self)
         self.factory = factory
@@ -25,7 +28,7 @@ class MarkovBot(irc.IRCClient, Commands):
         # Error/Info log. not to be confused with message logger
         self.log = logging.getLogger(__name__)
         self.deferred = defer.Deferred()
-        self.logger = logger.Logger(self.config.db_host, self.config.db)
+        self.logger = logger
 
     def get_key(self, nick):
         """Returns a string (host-channel-nick) used
@@ -34,9 +37,6 @@ class MarkovBot(irc.IRCClient, Commands):
         """
         key = ['irc', self.config.server_address, self.config.channel, nick]
         return '-'.join([k for k in key if k is not None])
-
-    def connection_lost(self, reason):
-        self.deferred.errback(reason)
 
     def signedOn(self):
         # This is called once the server has acknowledged that we sent
@@ -47,11 +47,12 @@ class MarkovBot(irc.IRCClient, Commands):
         """This will get called when the bot receives a message."""
         user = user.split('!', 1)[0]
         words = msg.split()
-
+        print "privmsg"
         # Check to see if they're sending me a private message
-        if channel is self.config.bot_nick:
+        if channel is self.nickname:
             msg = "I hope you die."
             self.msg(user, msg)
+            return
 
         if len(words) > self.config.chain_length:
             key = self.get_key(nick=user)
@@ -60,17 +61,17 @@ class MarkovBot(irc.IRCClient, Commands):
         if [msg.startswith(command) for command in self.commands]:
             self.check_command(user, msg)
 
-            regex = '^{n}\S*\W*'.format(n=self.config.bot_nick)
-            if re.match(regex, msg) or (
-                random.random() < self.config.chattiness
+        regex = '^{n}\S*\W*'.format(n=self.nickname)
+        if re.match(regex, msg) or (
+            random.random() < self.config.chattiness
                     ):
 
-                message = self.model.generate_message(msg)
+                    message = self.model.generate_message(msg)
 
-                if message:
-                    self.msg(channel, message)
-                else:
-                    self.msg(channel, 'nope')
+                    if message:
+                        self.msg(channel, message)
+                    else:
+                        self.msg(channel, 'nope')
 
     def check_command(self, user, msg):
 
@@ -80,11 +81,6 @@ class MarkovBot(irc.IRCClient, Commands):
                     command(msg)
                 else:
                     pass
-
-    def _sendMessage(self, msg, target, nick=None):
-        if nick:
-            msg = '%s, %s' % (nick, msg)
-        self.msg(channel, msg)
 
     def _showError(self, failure):
         return failure.getErrorMessage()
@@ -99,10 +95,11 @@ class IRCFactory (protocol.ReconnectingClientFactory):
         self.config = ConfigManager()
         self.channel = self.config.channel
         self.nickname = self.config.bot_nick
-
+        self.logger = Logger(self.config.db_host, self.config.db)
+        print self.logger.get_keys()
     def buildProtocol(self, addr):
-        model = Model(self.config)
-        return MarkovBot(self, model)
+        model = Model(self.logger)
+        return MarkovBot(self, model, self.logger)
 
     def connect(self):
 
@@ -125,6 +122,13 @@ class IRCFactory (protocol.ReconnectingClientFactory):
 
 
 def main():
+
     factory = IRCFactory()
-    factory.connect()
-    factory.run()
+
+    try:
+        factory.connect()
+        factory.run()
+
+    except KeyboardInterrupt:
+        factory.reactor.stop()
+        sys.exit()

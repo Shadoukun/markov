@@ -1,5 +1,4 @@
 import markovify
-import logger
 import exceptions
 import threading
 import logging
@@ -12,18 +11,17 @@ class Model(object):
     MAX_OVERLAP_TOTAL = 10
     DEFAULT_TRIES = 500
 
-    def __init__(self, config):
+    def __init__(self, logger):
         self.log = logging.getLogger(__name__)
 
-        self.config = config
-        self.dbLog = logger.Logger(self.config.db_host, self.config.db)
+        self.logger = logger
 
         self.get_model()
 
     def get_model(self, prefix=None):
         # pulls values from s-keys and generates MarkovEase model
         self.log.debug("Getting model text...")
-        text = self.dbLog.get_text()
+        text = self.logger.get_text()
 
         self.log.debug("Generating model...")
 
@@ -44,7 +42,10 @@ class Model(object):
         self.log.debug("generate message")
 
         # Takes a seed message (if one) and generates message
-        seed_enabled = self.config.seed
+        # TODO: pass seed variable from bot.
+
+        seed_enabled = "off"
+
         if seed_enabled is "on":
 
             try:
