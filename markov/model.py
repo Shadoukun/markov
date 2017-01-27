@@ -15,51 +15,48 @@ class Model(object):
         self.log = logging.getLogger(__name__)
 
         self.logger = logger
-
         self.get_model()
 
     def get_model(self, prefix=None):
-        # pulls values from s-keys and generates MarkovEase model
         self.log.debug("Getting model text...")
+
+        # pulls values from db
         text = self.logger.get_text()
 
-        self.log.debug("Generating model...")
-
         try:
+            self.log.debug("Generating model...")
+
+            # generate model
             self.model = markovify.NewlineText("\n".join(text), state_size=2)
+
             self.log.debug("Generated model successfully.")
             self.log.debug("[MODEL ID]" + str(id(self.model)))
 
         except:
-            raise exceptions.ModelException("Model generation failed.")
+            self.log.debug("Model generation failed.")
+            pass
 
-        self.log.debug("Spawning model timer...")
-        thread = threading.Timer(120, self.get_model)
-        thread.start()
-        self.log.debug("...Thread spawned.")
+        finally:
+            # create thread to recreate model perodically.
+            self.log.debug("Spawning model timer...")
 
-    def generate_message(self, msg):
-        self.log.debug("generate message")
+            thread = threading.Timer(120, self.get_model)
+            thread.start()
+
+            self.log.debug("...Thread spawned.")
+
+    def generate_message(self, msg, seedtoggle):
+        self.log.debug("generating message")
 
         # Takes a seed message (if one) and generates message
-        # TODO: pass seed variable from bot.
+        if seedtoggle is True:
 
-        seed_enabled = "off"
-
-        if seed_enabled is "on":
-
-            try:
-                seedlist = self.word_split(msg)
-                seedword = random.choice(seedlist)
-                seed = seedlist[seedword+1]
-                message = self.model.make_sentence_with_start(beginning=seed)
-            except:
-                raise exceptions.ModelException("failed seed")
-                message = self.model.make_sentence()
-
-            finally:
-                return message
+            seedlist = msg.split()
+            seedword = seedlist.index(random.choice(seedlist))
+            seed = ' '.join(seedlist[seedword:seedword+2])
+            message = self.model.make_sentence_with_start(beginning=seed)
 
         else:
             message = self.model.make_sentence()
-            return message
+
+        return message

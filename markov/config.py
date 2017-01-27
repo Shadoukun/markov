@@ -1,5 +1,6 @@
 import sys, os
 from configparser import SafeConfigParser
+import ast
 
 
 class ConfigManager(object):
@@ -81,7 +82,7 @@ class ConfigManager(object):
 
     @property
     def seed(self):
-        return self._seed
+        return ast.literal_eval(self._seed)
 
     @seed.setter
     def seed(self, value):

@@ -11,8 +11,9 @@ def db_connection(host, db):
 
 class Logger:
 
-    def __init__(self, host, db):
-        self.db = db_connection(host, db)
+    def __init__(self, config):
+        self.config = config
+        self.db = db_connection(self.config.db_host, self.config.db)
 
     def get_keys(self, key=None):
         # Returns the object (list) at 'key'
@@ -21,6 +22,13 @@ class Logger:
         else:
             dblist = self.db.keys()
         return dblist
+
+    def get_key(self, nick):
+        """returns key formatted for db
+          nick: user's nickname
+        """
+        key = ['irc', self.config.server_address, self.config.channel, nick]
+        return '-'.join([k for k in key if k is not None])
 
     def get_text(self, key=None):
 
@@ -32,19 +40,26 @@ class Logger:
 
         return txtlist
 
-    def _prepare_message(self, message):
-        rep = [
-            re.compile('http.*\W'),
-            re.compile('^markov\S*\W*')
-            # need to add more
-            ]
+    def _messageCheck(self, message):
 
-        for regex in rep:
-            cleaned = re.sub(regex, '', message)
+        rex = [
+            re.compile(r"\<.+\>"),
+            re.compile(r'http.*\W'),
+            re.compile(r"\[\d\d\:\d\d\:\d\d\]"),
+            re.compile(r"((/|\\)(?!\s)[^/ ]*)+/?")
+        ]
 
-        return cleaned
+        for r in rex:
+            if re.match(r, message):
+                return False
+            else:
+                return True
 
-    def log(self, key, message):
-        textk = self.db.Set(key)
-        m = string.translate(message.strip(), None, string.punctuation)
-        textk.add(self._prepare_message(m))
+    def log(self, nick, message):
+
+        key = self.get_key(nick)
+
+        if self._messageCheck(message):
+            textk = self.db.Set(key)
+            m = string.translate(message.strip(), None, string.punctuation)
+            textk.add(m)

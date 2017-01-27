@@ -7,20 +7,21 @@ class Commands(object):
 
     def set_chattiness(self, msg):
         command, value = msg.split()
-        oldvalue = self.config.chattiness
+        ov = self.config.chattiness
         self.config.chattiness = value
 
-        response = 'Chattiness changed from {ov} to {nv}'.format(ov=oldvalue, nv=value)
-        self.msg(self.factory.channel, response)
+        response = 'Chattiness changed from {ov} to {nv}'.format(ov=ov, nv=value)
+        self.msg(self.config.channel, response)
 
     def setSeed(self, msg):
         command, value = msg.split()
 
-        if value is "True" or "False":
-            self.config.seed = value
+        self.config.seed = value
 
-            if value is "True":
-                self.msg(self.factory.channel, "Seed: on")
+        if value == "on":
+            self.config.seed = "True"
+            self.msg(self.config.channel, "Seed: on")
 
-            if value is "False":
-                self.msg(self.factory.channel, "Seed: off")
+        if value == "off":
+            self.config.seed = "False"
+            self.msg(self.config.channel, "Seed: off")
